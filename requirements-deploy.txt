@@ -4,4 +4,6 @@ matplotlib==3.8.4
 pandas==2.2.0
 numpy==1.24.3
 streamlit==1.31.1
-torch==2.1.1+cpu --index-url https://download.pytorch.org/whl/cpu
+# CPU-only PyTorch (much smaller)
+torch==2.1.1
+torchvision==0.16.1
