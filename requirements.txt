@@ -1,7 +1,7 @@
 stable-baselines3==2.3.0
 gymnasium==0.29.1
 matplotlib==3.8.4
-pandas==2.2.0
-numpy==1.24.3
+pandas>=3.10.0
+numpy>=1.24.3
 streamlit==1.31.1
-torch==2.1.1+cpu --index-url https://download.pytorch.org/whl/cpu
+torch==2.1.1+cpu ; sys_platform != 'darwin' and platform_machine != 'arm64'
