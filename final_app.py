@@ -4,6 +4,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
 from datetime import datetime, timedelta
+import random
 import warnings
 
 warnings.filterwarnings('ignore')
@@ -89,7 +90,13 @@ def simulate_heuristic_model(budget, time_slots, base_ctr, traffic_volume):
         
         # Traffic varies by time slot (peak hours)
         traffic_multiplier = 1 + 0.5 * np.sin(2 * np.pi * t / time_slots)
-        adjusted_traffic = traffic_volume * traffic_multiplier
+        
+        # support list of traffic values when auto_mode generates a series
+        if isinstance(traffic_volume, list):
+            current_traffic = traffic_volume[t]
+        else:
+            current_traffic = traffic_volume
+        adjusted_traffic = current_traffic * traffic_multiplier
         
         # CTR varies
         ctr_variation = base_ctr * np.random.uniform(0.8, 1.2)
@@ -118,6 +125,19 @@ def simulate_heuristic_model(budget, time_slots, base_ctr, traffic_volume):
         'time_slots': list(range(time_slots))
     }
 
+
+
+def generate_dynamic_traffic(slot, total_slots):
+    """Create a more realistic traffic pattern with a peak period."""
+    peak_slot = total_slots // 2
+    # base traffic is unused but kept for reference
+    if abs(slot - peak_slot) < total_slots * 0.2:
+        # around peak hours
+        return random.randint(2000, 4000)
+    else:
+        return random.randint(500, 1500)
+
+
 def simulate_ppo_model(budget, time_slots, base_ctr, traffic_volume):
     """Phase 2: PPO Model (Smart Budget Allocation)"""
     clicks = []
@@ -139,7 +159,13 @@ def simulate_ppo_model(budget, time_slots, base_ctr, traffic_volume):
         bid = min(bid, remaining_budget)
         bids.append(bid)
         
-        adjusted_traffic = traffic_volume * traffic_multiplier
+        # determine current traffic, allow passing a list from auto mode
+        if isinstance(traffic_volume, list):
+            current_traffic = traffic_volume[t]
+        else:
+            current_traffic = traffic_volume
+
+        adjusted_traffic = current_traffic * traffic_multiplier
         ctr_variation = base_ctr * np.random.uniform(0.85, 1.25)  # PPO gets better CTR
         clicks_in_slot = int(adjusted_traffic * (ctr_variation / 100))
         clicks.append(clicks_in_slot)
@@ -192,23 +218,37 @@ with st.sidebar:
     )
     
     st.markdown("### 📈 Traffic & Performance")
-    base_ctr = st.slider(
-        "Initial CTR (%)",
-        min_value=0.5,
-        max_value=10.0,
-        value=2.5,
-        step=0.1,
-        help="Click-Through Rate baseline"
-    )
-    
-    traffic_volume = st.slider(
-        "Traffic Volume (per time slot)",
-        min_value=100,
-        max_value=5000,
-        value=1000,
-        step=100,
-        help="Average impressions per time slot"
-    )
+
+    # ---- Auto / Manual toggle ----------------------------------
+    auto_mode = st.toggle("Enable Auto Mode", value=True)
+
+    if auto_mode:
+        st.info("Auto Mode Enabled: System generating traffic and CTR automatically")
+
+        # generate a realistic traffic pattern across slots
+        traffic_volume = [generate_dynamic_traffic(i, time_slots) for i in range(time_slots)]
+        base_ctr = random.uniform(0.5, 5.0)  # baseline CTR in percent
+
+    else:
+        st.info("Manual Mode: User-defined values")
+
+        base_ctr = st.slider(
+            "Initial CTR (%)",
+            min_value=0.5,
+            max_value=10.0,
+            value=2.5,
+            step=0.1,
+            help="Click-Through Rate baseline"
+        )
+        
+        traffic_volume = st.slider(
+            "Traffic Volume (per time slot)",
+            min_value=100,
+            max_value=5000,
+            value=1000,
+            step=100,
+            help="Average impressions per time slot"
+        )
     
     st.markdown("### 🎯 Model Selection")
     models_to_run = st.multiselect(
