@@ -73,7 +73,7 @@ if 'phase2_results' not in st.session_state:
     st.session_state.phase2_results = None
 
 # ==================== HELPER FUNCTIONS ====================
-def simulate_heuristic_model(budget, time_slots, base_ctr, traffic_volume):
+def simulate_heuristic_model(budget, time_slots, base_ctr, traffic_volume, cost_per_impression=0.05):
     """Phase 1: Heuristic Model (Equal Budget Distribution)"""
     clicks = []
     bids = []
@@ -81,6 +81,7 @@ def simulate_heuristic_model(budget, time_slots, base_ctr, traffic_volume):
     budget_history = [budget]
     ctr_history = []
     revenue = 0
+    impressions_list = []
     
     bid_per_slot = budget / time_slots
     
@@ -88,19 +89,21 @@ def simulate_heuristic_model(budget, time_slots, base_ctr, traffic_volume):
         bid = bid_per_slot
         bids.append(bid)
         
-        # Traffic varies by time slot (peak hours)
-        traffic_multiplier = 1 + 0.5 * np.sin(2 * np.pi * t / time_slots)
+        # Budget-based impressions calculation
+        impressions = int(bid / cost_per_impression)
+        impressions_list.append(impressions)
         
-        # support list of traffic values when auto_mode generates a series
+        # Limit impressions by available traffic
         if isinstance(traffic_volume, list):
-            current_traffic = traffic_volume[t]
+            traffic_limit = traffic_volume[t]
         else:
-            current_traffic = traffic_volume
-        adjusted_traffic = current_traffic * traffic_multiplier
+            traffic_limit = traffic_volume
+        
+        impressions = min(impressions, traffic_limit)
         
         # CTR varies
         ctr_variation = base_ctr * np.random.uniform(0.8, 1.2)
-        clicks_in_slot = int(adjusted_traffic * (ctr_variation / 100))
+        clicks_in_slot = int(impressions * (ctr_variation / 100))
         clicks.append(clicks_in_slot)
         
         # Revenue from clicks (assume $0.5 per click)
@@ -122,7 +125,8 @@ def simulate_heuristic_model(budget, time_slots, base_ctr, traffic_volume):
         'bids': bids,
         'budget_history': budget_history,
         'ctr_history': ctr_history,
-        'time_slots': list(range(time_slots))
+        'time_slots': list(range(time_slots)),
+        'impressions': impressions_list
     }
 
 
@@ -138,7 +142,7 @@ def generate_dynamic_traffic(slot, total_slots):
         return random.randint(500, 1500)
 
 
-def simulate_ppo_model(budget, time_slots, base_ctr, traffic_volume):
+def simulate_ppo_model(budget, time_slots, base_ctr, traffic_volume, cost_per_impression=0.05):
     """Phase 2: PPO Model (Smart Budget Allocation)"""
     clicks = []
     bids = []
@@ -146,6 +150,7 @@ def simulate_ppo_model(budget, time_slots, base_ctr, traffic_volume):
     budget_history = [budget]
     ctr_history = []
     revenue = 0
+    impressions_list = []
     
     for t in range(time_slots):
         # PPO strategy: allocate more budget during peak hours
@@ -159,15 +164,20 @@ def simulate_ppo_model(budget, time_slots, base_ctr, traffic_volume):
         bid = min(bid, remaining_budget)
         bids.append(bid)
         
-        # determine current traffic, allow passing a list from auto mode
+        # Budget-based impressions calculation
+        impressions = int(bid / cost_per_impression)
+        impressions_list.append(impressions)
+        
+        # Limit impressions by available traffic
         if isinstance(traffic_volume, list):
-            current_traffic = traffic_volume[t]
+            traffic_limit = traffic_volume[t]
         else:
-            current_traffic = traffic_volume
-
-        adjusted_traffic = current_traffic * traffic_multiplier
+            traffic_limit = traffic_volume
+        
+        impressions = min(impressions, traffic_limit)
+        
         ctr_variation = base_ctr * np.random.uniform(0.85, 1.25)  # PPO gets better CTR
-        clicks_in_slot = int(adjusted_traffic * (ctr_variation / 100))
+        clicks_in_slot = int(impressions * (ctr_variation / 100))
         clicks.append(clicks_in_slot)
         
         revenue += clicks_in_slot * 0.5
@@ -187,7 +197,8 @@ def simulate_ppo_model(budget, time_slots, base_ctr, traffic_volume):
         'bids': bids,
         'budget_history': budget_history,
         'ctr_history': ctr_history,
-        'time_slots': list(range(time_slots))
+        'time_slots': list(range(time_slots)),
+        'impressions': impressions_list
     }
 
 # ==================== MAIN APP ====================
@@ -250,12 +261,22 @@ with st.sidebar:
             help="Average impressions per time slot"
         )
     
-    st.markdown("### 🎯 Model Selection")
-    models_to_run = st.multiselect(
-        "Select Models to Compare",
-        ["Phase 1 - Heuristic", "Phase 2 - PPO"],
-        default=["Phase 1 - Heuristic", "Phase 2 - PPO"],
-        help="Run simulations for selected models"
+    st.markdown("### 🎯 Mode Selection")
+    mode = st.selectbox(
+        "Select Mode",
+        ["Phase 1 Only", "Phase 2 Only", "Compare Both"],
+        index=2,
+        help="Choose which phase(s) to run"
+    )
+    
+    st.markdown("### 💰 Cost Settings")
+    cost_per_impression = st.slider(
+        "Cost per Impression ($)",
+        min_value=0.01,
+        max_value=0.50,
+        value=0.05,
+        step=0.01,
+        help="CPI affects how many impressions your budget can buy"
     )
     
     st.markdown("---")
@@ -268,17 +289,29 @@ if run_button:
     # Progress bar
     progress_bar = st.progress(0)
     
-    # Run selected models
-    if "Phase 1 - Heuristic" in models_to_run:
-        progress_bar.progress(25)
+    # Run simulations based on selected mode
+    if mode == "Phase 1 Only":
+        progress_bar.progress(50)
         st.session_state.phase1_results = simulate_heuristic_model(
-            daily_budget, time_slots, base_ctr, traffic_volume
+            daily_budget, time_slots, base_ctr, traffic_volume, cost_per_impression
+        )
+        st.session_state.phase2_results = None
+    
+    elif mode == "Phase 2 Only":
+        progress_bar.progress(50)
+        st.session_state.phase1_results = None
+        st.session_state.phase2_results = simulate_ppo_model(
+            daily_budget, time_slots, base_ctr, traffic_volume, cost_per_impression
         )
     
-    if "Phase 2 - PPO" in models_to_run:
+    else:  # Compare Both
+        progress_bar.progress(25)
+        st.session_state.phase1_results = simulate_heuristic_model(
+            daily_budget, time_slots, base_ctr, traffic_volume, cost_per_impression
+        )
         progress_bar.progress(75)
         st.session_state.phase2_results = simulate_ppo_model(
-            daily_budget, time_slots, base_ctr, traffic_volume
+            daily_budget, time_slots, base_ctr, traffic_volume, cost_per_impression
         )
     
     progress_bar.progress(100)
