@@ -222,11 +222,19 @@ with st.sidebar:
     st.markdown("### ⏰ Time Configuration")
     time_slots = st.slider(
         "Number of Time Slots (hours)",
-        min_value=6,
-        max_value=48,
-        value=24,
+        min_value=1,
+        max_value=24,
+        value=1,
         help="How many time periods in a day (typically 24 hours)"
     )
+    
+    # Display selected time slot as clock time
+    if time_slots == 1:
+        st.write("Selected Time Slot: 1:00 AM")
+    elif time_slots <= 12:
+        st.write(f"Selected Time Slot: {time_slots}:00 AM")
+    else:
+        st.write(f"Selected Time Slot: {time_slots-12}:00 PM")
     
     st.markdown("### 📈 Traffic & Performance")
 
