@@ -220,21 +220,41 @@ with st.sidebar:
     )
     
     st.markdown("### ⏰ Time Configuration")
-    time_slots = st.slider(
-        "Number of Time Slots (hours)",
-        min_value=1,
-        max_value=24,
-        value=1,
-        help="How many time periods in a day (typically 24 hours)"
-    )
     
-    # Display selected time slot as clock time
-    if time_slots == 1:
-        st.write("Selected Time Slot: 1:00 AM")
-    elif time_slots <= 12:
-        st.write(f"Selected Time Slot: {time_slots}:00 AM")
-    else:
-        st.write(f"Selected Time Slot: {time_slots-12}:00 PM")
+    # Time range selection instead of single hour
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        start_hour = st.selectbox(
+            "Start Time",
+            options=list(range(24)),
+            format_func=lambda x: f"{x:02d}:00" if x <= 12 else f"{x-12:02d}:00 PM" if x > 12 else f"{x:02d}:00 AM",
+            index=9,  # Default to 9 AM
+            help="Campaign start time"
+        )
+    
+    with col2:
+        end_hour = st.selectbox(
+            "End Time",
+            options=list(range(1, 25)),  # 1-24 for proper range calculation
+            format_func=lambda x: f"{x:02d}:00" if x <= 12 else f"{x-12:02d}:00 PM" if x > 12 else f"{x:02d}:00 AM",
+            index=17,  # Default to 5 PM (17:00)
+            help="Campaign end time"
+        )
+    
+    # Calculate time slots based on selected range
+    if end_hour <= start_hour:
+        end_hour += 24  # Handle overnight campaigns
+    
+    time_slots = end_hour - start_hour
+    time_slots = min(time_slots, 24)  # Cap at 24 hours
+    
+    # Display selected time range
+    start_time_str = f"{start_hour:02d}:00" if start_hour <= 12 else f"{start_hour-12:02d}:00 PM" if start_hour > 12 else f"{start_hour:02d}:00 AM"
+    end_time_str = f"{end_hour%24:02d}:00" if end_hour%24 <= 12 else f"{(end_hour%24)-12:02d}:00 PM" if end_hour%24 > 12 else f"{end_hour%24:02d}:00 AM"
+    
+    st.success(f" Campaign Period: {start_time_str} - {end_time_str} ({time_slots} hours)")
+    st.info(f" Total Time Slots: {time_slots}")
     
     st.markdown("### 📈 Traffic & Performance")
 
